@@ -181,4 +181,52 @@ Resources:
         DestinationCidrBlock: '0.0.0.0/0'
         NatGatewayId: !Ref rAutoSVPCNATGateway
 
+  r3TierAppTransitGateway:
+    Type: AWS::EC2::TransitGateway
+    Properties:
+      AmazonSideAsn: 65000
+      Description: TGW Route Integration Test
+      AutoAcceptSharedAttachments: disable
+      DefaultRouteTableAssociation: enable
+      DnsSupport: enable
+      VpnEcmpSupport: enable
+      Tags:
+      - Key: Name
+        Value: 3TierApp-TGW
+
+  r3TierAppTransitGatewayBastionVPCAttach:
+    Type: AWS::EC2::TransitGatewayAttachment
+    Properties: 
+      SubnetIds: 
+        - !Ref rBastionVPCPubSub1
+      Tags: 
+        - Key: Name
+          Value: 3TierApp-TGW-Attachment1
+      TransitGatewayId: !Ref r3TierAppTransitGateway
+      VpcId: !Ref rBastionVPC
+
+  r3TierAppTransitGatewayAutoSVPCAttach:
+    Type: AWS::EC2::TransitGatewayAttachment
+    Properties: 
+      SubnetIds: 
+        - !Ref rAutoSVPCPublicSubnet1
+      Tags: 
+        - Key: Name
+          Value: 3TierApp-TGW-Attachment2
+      TransitGatewayId: !Ref r3TierAppTransitGateway
+      VpcId: !Ref rAutoSVPC
+
+  # r3TierAppTGWBastionVPCRoute:
+  #   Type: AWS::EC2::Route
+  #   Properties: 
+  #     DestinationCidrBlock: 0.0.0.0/0
+  #     RouteTableId: !Ref rBastionVPCPubRouteTable
+  #     TransitGatewayId: !Ref r3TierAppTransitGateway
+
+  # r3TierAppTGWAutoScalVPCRoute:
+  #   Type: AWS::EC2::Route
+  #   Properties: 
+  #     DestinationCidrBlock: 0.0.0.0/0
+  #     RouteTableId: !Ref rAutoSVPCPublicRouteTable
+  #     TransitGatewayId: !Ref r3TierAppTransitGateway
 #Outputs:
