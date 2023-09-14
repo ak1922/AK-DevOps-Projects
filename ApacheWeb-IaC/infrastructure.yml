@@ -1,0 +1,452 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: | 
+  Deploy Apache Web Server using Terraform IaC
+
+Parameters:
+
+  pAvailZone1:
+    Description: 1st availability zone
+    Type: AWS::EC2::AvailabilityZone::Name
+    Default: us-east-1d
+
+  pAvailZone2:
+    Description: 2nd availability zone
+    Type: AWS::EC2::AvailabilityZone::Name
+    Default: us-east-1f 
+
+  pAvailZone3:
+    Description: 3rd availability zone
+    Type: AWS::EC2::AvailabilityZone::Name
+    Default: us-east-1c
+
+  pAvailZone4:
+    Description: 4th availability zone
+    Type: AWS::EC2::AvailabilityZone::Name
+    Default: us-east-1a
+
+  pLatestAmiId:
+    Type: 'AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>'
+    Default: '/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2'
+
+  pKeyPair:
+    Description: AWS keys to access servers
+    Type: AWS::EC2::KeyPair::KeyName
+
+  pEmail:
+    Description: Email for SNS Topic subscription
+    Type: String
+
+Resources:
+  
+  rApacheAppVPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 172.32.0.0/16
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      InstanceTenancy: default
+      Tags: 
+        - Key: Name
+          Value: ApacheAppVPC
+
+  rApacheAppVPCPublicSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: !Ref pAvailZone1
+      CidrBlock: 172.32.0.0/18
+      MapPublicIpOnLaunch: true
+      Tags: 
+        - Key: Name
+          Value: ApacheAppVPCPublicSubnet1
+      VpcId: !Ref rApacheAppVPC
+
+  rApacheAppVPCPrivateSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: !Ref pAvailZone2
+      CidrBlock: 172.32.64.0/18
+      MapPublicIpOnLaunch: false
+      Tags: 
+        - Key: Name
+          Value: ApacheAppVPCPrivateSubnet1
+      VpcId: !Ref rApacheAppVPC
+
+  rApacheAppVPCPublicSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: !Ref pAvailZone3
+      CidrBlock: 172.32.128.0/18
+      MapPublicIpOnLaunch: true
+      Tags: 
+        - Key: Name
+          Value: ApacheAppVPCPublicSubnet2
+      VpcId: !Ref rApacheAppVPC
+
+  rApacheAppVPCPrivateSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: !Ref pAvailZone4
+      CidrBlock: 172.32.192.0/18
+      MapPublicIpOnLaunch: false
+      Tags: 
+        - Key: Name
+          Value: ApacheAppVPCPrivateSubnet2
+      VpcId: !Ref rApacheAppVPC          
+
+
+  rApacheAppVPCInternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags: 
+        - Key: Name
+          Value: ApacheAppVPCInternetGateway
+
+  rApacheAppVPCInternetGatewayAttach:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      InternetGatewayId: !Ref rApacheAppVPCInternetGateway
+      VpcId: !Ref rApacheAppVPC
+
+  rApacheAppVPCPublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      Tags: 
+        - Key: Name
+          Value: ApacheAppVPCPublicRouteTable
+      VpcId: !Ref rApacheAppVPC
+
+  rApacheAppVPCPrivateRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      Tags: 
+        - Key: Name
+          Value: ApacheAppVPCPrivateRouteTable
+      VpcId: !Ref rApacheAppVPC
+
+  rApacheAppVPCPublicSubnet1RouteTableAssc:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref rApacheAppVPCPublicRouteTable
+      SubnetId: !Ref rApacheAppVPCPublicSubnet1
+
+  rApacheAppVPCPublicSubnet2RouteTableAssc:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref rApacheAppVPCPublicRouteTable
+      SubnetId: !Ref rApacheAppVPCPublicSubnet2
+
+  rApacheAppVPCPrivateSubnet1RouteTableAssc:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref rApacheAppVPCPrivateRouteTable
+      SubnetId: !Ref rApacheAppVPCPrivateSubnet1
+
+  rApacheAppVPCPrivateSubnet2RouteTableAssc:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref rApacheAppVPCPrivateRouteTable
+      SubnetId: !Ref rApacheAppVPCPrivateSubnet2
+
+  rApacheAppVPCInternetGatewayRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      GatewayId: !Ref rApacheAppVPCInternetGateway
+      DestinationCidrBlock: 0.0.0.0/0
+      RouteTableId: !Ref rApacheAppVPCPublicRouteTable
+
+  rApacheAppElasticIP:
+    Type: AWS::EC2::EIP
+    Properties:
+      Tags: 
+        - Key: Name
+          Value: ApacheAppElasticIP
+
+  rApacheAppVPCNatGateway:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt rApacheAppElasticIP.AllocationId
+      SubnetId: !Ref rApacheAppVPCPublicSubnet1
+      Tags: 
+        - Key: Name
+          Value: ApacheAppVPCNatGateway
+
+  rApacheAppVPCNatGatewayRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref rApacheAppVPCNatGateway
+      RouteTableId: !Ref rApacheAppVPCPrivateRouteTable
+
+  rApacheAppBastionSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for bastion host to allow ssh.
+      GroupName: ApacheApp-BastionSecGrp
+      SecurityGroupIngress: 
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0    
+      Tags: 
+        - Key: Name
+          Value: ApacheApp-BastionSecGrp
+      VpcId: !Ref rApacheAppVPC
+
+  rApacheAppLoadBalancerSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security Group for load balancer
+      GroupName: ApacheApp-LoadBalSecGrp
+      SecurityGroupIngress: 
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+      Tags: 
+        - Key: Name
+          Value: ApacheApp-LoadBalSecGrp
+      VpcId: !Ref rApacheAppVPC
+
+  rApacheAppServerSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow ports 80 and 443 for http and https traffic
+      GroupName: ApacheApp-AppServSecGrp
+      SecurityGroupIngress: 
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0
+      Tags: 
+        - Key: Name
+          Value: ApacheApp-AppServSecGrp
+      VpcId: !Ref rApacheAppVPC
+
+  rApacheAppTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      HealthCheckEnabled: true
+      HealthCheckIntervalSeconds: 10
+      HealthCheckPath: '/'
+      HealthCheckPort: "80"
+      HealthCheckProtocol: HTTP
+      HealthCheckTimeoutSeconds: 5
+      HealthyThresholdCount: 5
+      Matcher:
+        HttpCode: "200" 
+      Name: ApacheAppTargetGroup
+      Port: 443
+      Protocol: HTTPS
+      ProtocolVersion: HTTP1
+      Tags:
+        - Key: Name 
+          Value: ApacheAppTargetGroup
+      TargetType: instance
+      UnhealthyThresholdCount: 3
+      VpcId: !Ref rApacheAppVPC
+
+  rApacheAppLaunchTemplate:
+    Type: AWS::EC2::LaunchTemplate
+    Properties:
+      LaunchTemplateData:
+        ImageId: !Ref pLatestAmiId
+        InstanceType: t2.micro
+        KeyName: !Ref pKeyPair
+        SecurityGroupIds:
+          - !Ref rApacheAppServerSecurityGroup
+        UserData: !Base64 |
+          #!/bin/bash -x
+          sudo yum update -y
+          sudo yum install -y httpd
+          chmod -R 777 /var/www/html
+          sudo systemctl start httpd
+          sudo systemctl enable httpd
+          sudo bash -c 'echo your very first web server > /var/www/html/index.html'
+      LaunchTemplateName: ApacheApp-LaunchTemplate
+      TagSpecifications:
+        - ResourceType: launch-template 
+          Tags:
+            - Key: Name 
+              Value: ApacheApp-LaunchTemplate
+
+  rApacheAppLoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      IpAddressType: ipv4
+      Name: ApacheAppLoadBalancer
+      Scheme: internet-facing
+      SecurityGroups: 
+        - !Ref rApacheAppLoadBalancerSecurityGroup
+      Subnets: 
+        - !Ref rApacheAppVPCPublicSubnet1
+        - !Ref rApacheAppVPCPublicSubnet2
+      Tags: 
+        - Key: Name
+          Value: ApacheAppLoadBalancer
+      Type: application
+
+  rApacheAppLoadBalancerListenerHTTP:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      DefaultActions:
+        - Type: forward 
+          TargetGroupArn: !Ref rApacheAppTargetGroup
+      LoadBalancerArn: !Ref rApacheAppLoadBalancer
+      Port: 80
+      Protocol: HTTP
+
+  rApacheAppLoadBalancerListenerHTTPS:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      Certificates:
+        - CertificateArn: arn:aws:acm:us-east-1:355740888737:certificate/58496ee5-1ea8-4f1f-99e3-67a5fb7f5cfd
+      DefaultActions:
+        - Type: forward 
+          TargetGroupArn: !Ref rApacheAppTargetGroup
+      LoadBalancerArn: !Ref rApacheAppLoadBalancer
+      Port: 443
+      Protocol: HTTPS
+
+  rApacheAppAutoScalingGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      AutoScalingGroupName: ApacheApp-AutoScalingGroup
+      HealthCheckGracePeriod: 200
+      DesiredCapacity: '2'
+      HealthCheckType: ELB
+      LaunchTemplate:
+        LaunchTemplateId: !Ref rApacheAppLaunchTemplate
+        Version: !GetAtt rApacheAppLaunchTemplate.LatestVersionNumber
+      MaxSize: '4'
+      MinSize: '1' 
+      Tags:
+        - Key: Name
+          Value: ApacheApp-AutoScalingGroup
+          PropagateAtLaunch: true
+      TargetGroupARNs:
+        - !Ref rApacheAppTargetGroup
+      VPCZoneIdentifier:
+        - !Ref rApacheAppVPCPublicSubnet1
+        - !Ref rApacheAppVPCPublicSubnet2
+      NotificationConfigurations: 
+        - TopicARN: !Ref rApacheAppAutoScalingGroupSNSTopic1
+          NotificationTypes:
+            - autoscaling:EC2_INSTANCE_LAUNCH
+            - autoscaling:EC2_INSTANCE_LAUNCH_ERROR
+            - autoscaling:EC2_INSTANCE_TERMINATE
+            - autoscaling:EC2_INSTANCE_TERMINATE_ERROR
+            - autoscaling:TEST_NOTIFICATION
+      MetricsCollection:
+        - Metrics: 
+          -  GroupMinSize
+          -  GroupMaxSize
+          -  GroupDesiredCapacity
+          -  GroupInServiceInstances
+          -  GroupInServiceCapacity
+          -  GroupTotalInstances
+          Granularity: '1Minute'
+
+  rApacheAppASGScalingPolicy:
+      Type: AWS::AutoScaling::ScalingPolicy
+      Properties:
+        AutoScalingGroupName: !Ref rApacheAppAutoScalingGroup
+        PolicyType: TargetTrackingScaling
+        TargetTrackingConfiguration: 
+          PredefinedMetricSpecification: 
+            PredefinedMetricType: ASGAverageCPUUtilization
+          TargetValue: 50.0 
+
+  rApacheAppAutoScalingGroupSNSTopic1:
+    Type: AWS::SNS::Topic
+    Properties:
+      DisplayName: AppacheApp-HighCPU-Topic
+      Subscription:
+        - Endpoint: !Ref pEmail
+          Protocol: email
+      TopicName: AppacheAppHighCPUTopic
+      Tags:
+        - Key: Name
+          Value: AppacheApp-HighCPU-Topic
+
+  rApacheAppAutoScalingGroupSNSTopic2:
+    Type: AWS::SNS::Topic
+    Properties:
+      DisplayName: AppacheApp-NormalCPU-Topic
+      Subscription:
+        - Endpoint: !Ref pEmail
+          Protocol: email
+      TopicName: AppacheAppNormalCPUTopic
+      Tags:
+        - Key: Name
+          Value: AppacheApp-NormalCPU-Topic
+
+  rApacheAppAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmActions:
+        - !Ref rApacheAppAutoScalingGroupSNSTopic1
+      AlarmDescription: Alarm for Simple auto scaling group
+      AlarmName: AppacheApp-TargScal-Alarm
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      Dimensions:
+        - Name: AutoScalingGroupName
+          Value: !Ref rApacheAppAutoScalingGroup
+      EvaluationPeriods: 1
+      MetricName: 'CPUUtilization'
+      Namespace: AWS/EC2
+      OKActions:
+        - !Ref rApacheAppAutoScalingGroupSNSTopic2
+      Period: 10
+      Statistic: Average 
+      Threshold: 50
+
+  rApacheAppTargScalEventRule:  
+    Type: AWS::Events::Rule
+    Properties: 
+      Description: Event rule for auto scaling group
+      EventPattern:
+        source:
+          - aws.application-autoscaling
+        detail-type:
+          - Application Auto Scaling Scaling Activity State Change
+      Name: ApacheApp-TargScal-Rule
+      State: ENABLED
+      Targets: 
+        - Arn: 
+            !GetAtt rApacheAppAutoScalingGroupSNSTopic1.TopicArn
+          Id: EBR123
+
+Outputs:
+  ElasticIP: 
+    Description: Public IP address from elastic IP
+    Value: !Ref rApacheAppElasticIP
+  
+  ElasticIPLong:
+    Description: Show allocation id
+    Value: !GetAtt rApacheAppElasticIP.AllocationId
+
+  AppLoadBalURL:
+    Value: !Join 
+      -  ''
+      - -  'https://'
+        -  !GetAtt rApacheAppLoadBalancer.DNSName
