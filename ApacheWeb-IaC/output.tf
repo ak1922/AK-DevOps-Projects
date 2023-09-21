@@ -5,3 +5,7 @@ output "BastionHost-privateIP" {
 output "BastionHost-publicIP" {
   value = aws_instance.ApacheApp-BastionHost.public_ip
 }
+
+output "LoadBalancerURL" {
+  value = aws_lb.ApacheApp-LoadBalancer.dns_name
+}
