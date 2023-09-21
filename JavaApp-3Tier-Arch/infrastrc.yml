@@ -1,0 +1,219 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: |
+  Build infrastructure to deploy scalable, highly available and secured Java application on 3-tier architecture and provide application access to the 
+  end users from public internet.
+
+#Parameters:
+  
+Resources:
+  
+  rBastionVPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 192.168.0.0/16
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      InstanceTenancy: default
+      Tags: 
+        - Key: Name
+          Value: 3TierBastionVPC
+  
+  rBastionVPCInternetGateWay:     #Internet Gateway for Bastion subnet
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags: 
+        - Key: Name
+          Value: 3TierBastionVPC-igw
+
+  rBastionVPCPubSub1:   #Single subnet for Bastion host
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZoneId: use1-az2
+      CidrBlock: 192.168.0.0/18
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: 3TierBastionVPC-public-subnet
+      VpcId: !Ref rBastionVPC
+
+  rBastionVPCPubRouteTable:    #Route Table for Bastion hist VPC
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref rBastionVPC
+      Tags:
+      - Key: Name
+        Value: 3TierBastionVPC-RouteTable
+
+  rBastionVPCPubSub1RouteTableAss:   #Route Table association for subnet
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties: 
+      RouteTableId: !Ref rBastionVPCPubRouteTable
+      SubnetId: !Ref rBastionVPCPubSub1
+
+  rBastionVPCInternetGateWayAttach:    #Add VPC Gateway
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties: 
+      InternetGatewayId: !Ref rBastionVPCInternetGateWay
+      VpcId: !Ref rBastionVPC
+
+  rBastionVPCInternetGateWayRoute:     #Add route for VPC gateway
+    Type: AWS::EC2::Route
+    Properties:
+       RouteTableId: !Ref rBastionVPCPubRouteTable
+       DestinationCidrBlock: 0.0.0.0/0
+       GatewayId: !Ref rBastionVPCInternetGateWay
+
+  rAutoSVPC:     #Second VPC for Auto scaling group
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 172.32.0.0/16
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      InstanceTenancy: default
+      Tags: 
+        - Key: Name
+          Value: 3TierScalingVPC
+
+  rAutoSVPCPublicSubnet1:   #Public Subnet for AutoScaling VPC
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZoneId: use1-az4
+      CidrBlock: 172.32.0.0/18
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: 3TierScalingVPC-public-subnet1
+      VpcId: !Ref rAutoSVPC
+
+  rAutoSVPCPrivateSubnet1:   #Private subnet for AutoScaling VPC
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZoneId: use1-az6
+      CidrBlock: 172.32.64.0/18
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: 3TierScalingVPC-private-subnet1
+      VpcId: !Ref rAutoSVPC
+
+  rAutoSVPCPrivateSubnet2:   #Private subnet for AutoScaling VPC
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZoneId: use1-az1
+      CidrBlock: 172.32.128.0/18
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: 3TierScalingVPC-private-subnet2
+      VpcId: !Ref rAutoSVPC
+
+  rAutoSVPCPublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref rAutoSVPC
+      Tags:
+      - Key: Name
+        Value: 3TierScalingVPC-Public-RT
+
+  rAutoSVPCPrivateRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref rAutoSVPC
+      Tags:
+      - Key: Name
+        Value: 3TierScalingVPC-Private-RT
+
+  rAutoSVPCPublicSubnetAssn1:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties: 
+      RouteTableId: !Ref rAutoSVPCPublicRouteTable
+      SubnetId: !Ref rAutoSVPCPublicSubnet1
+
+  rAutoSVPCPrivateSubnetAssn1:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties: 
+      RouteTableId: !Ref rAutoSVPCPrivateRouteTable
+      SubnetId: !Ref rAutoSVPCPrivateSubnet1  
+
+  rAutoSVPCPrivateSubnetAssn2:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties: 
+      RouteTableId: !Ref rAutoSVPCPrivateRouteTable
+      SubnetId: !Ref rAutoSVPCPrivateSubnet2    
+
+  rAutoSVPCInternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties: 
+      Tags: 
+        - Key: Name
+          Value: 3TierScalingVPC-vpc-IGW
+
+  rAutoSVPCInternetGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties: 
+      InternetGatewayId: !Ref rAutoSVPCInternetGateway
+      VpcId: !Ref rAutoSVPC
+
+  rAutoSVPCInternetGatewayRoute:
+    Type: AWS::EC2::Route
+    Properties:
+       RouteTableId: !Ref rAutoSVPCPublicRouteTable
+       DestinationCidrBlock: 0.0.0.0/0
+       GatewayId: !Ref rAutoSVPCInternetGateway
+
+  rAutoSVPCNATGateway:
+    Type: AWS::EC2::NatGateway
+    Properties:
+        AllocationId: !GetAtt rAutoSVPCNATGatewayEIP.AllocationId
+        SubnetId: !Ref rAutoSVPCPublicSubnet1
+        Tags:
+        - Key: Name
+          Value: 3TierScalingVPC-NatGateWay
+  rAutoSVPCNATGatewayEIP:
+    Type: AWS::EC2::EIP
+    Properties:
+        Domain: vpc
+  rAutoSVPCRouteNATGateway:
+    # DependsOn: rAutoSVPCNATGateway
+    Type: AWS::EC2::Route
+    Properties:
+        RouteTableId: !Ref rAutoSVPCPrivateRouteTable
+        DestinationCidrBlock: '0.0.0.0/0'
+        NatGatewayId: !Ref rAutoSVPCNATGateway
+
+  r3TierAppTransitGateway:
+    Type: AWS::EC2::TransitGateway
+    Properties:
+      AmazonSideAsn: 65000
+      Description: TGW Route Integration Test
+      AutoAcceptSharedAttachments: disable
+      DefaultRouteTableAssociation: enable
+      DnsSupport: enable
+      VpnEcmpSupport: enable
+      Tags:
+      - Key: Name
+        Value: 3TierApp-TGW
+
+  r3TierAppTransitGatewayBastionVPCAttach:
+    Type: AWS::EC2::TransitGatewayAttachment
+    Properties: 
+      SubnetIds: 
+        - !Ref rBastionVPCPubSub1
+      Tags: 
+        - Key: Name
+          Value: 3TierApp-TGW-Attachment1
+      TransitGatewayId: !Ref r3TierAppTransitGateway
+      VpcId: !Ref rBastionVPC
+
+  r3TierAppTransitGatewayAutoSVPCAttach:
+    Type: AWS::EC2::TransitGatewayAttachment
+    Properties: 
+      SubnetIds: 
+        - !Ref rAutoSVPCPublicSubnet1
+      Tags: 
+        - Key: Name
+          Value: 3TierApp-TGW-Attachment2
+      TransitGatewayId: !Ref r3TierAppTransitGateway
+      VpcId: !Ref rAutoSVPC
+
+#Outputs:
