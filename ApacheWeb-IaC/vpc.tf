@@ -125,7 +125,7 @@ resource "aws_route" "ApacheAppVPC-NatGateway-Route" {
 
 resource "aws_security_group" "ApacheAppVPC-BastionHost-SecGrp" {
   name = "ApacheAppVPC-BastionHost-SecGrp"
-  description = "Security group for Bastion host in ApacheAppVPC"
+  description = "Security group for Bastion host to allow ssh"
   vpc_id = aws_vpc.ApacheApp-vpc.id
 
   ingress {
@@ -142,4 +142,69 @@ resource "aws_security_group" "ApacheAppVPC-BastionHost-SecGrp" {
     protocol = "-1"
     cidr_blocks = ["0.0.0.0/0"]
   }
+}
+
+resource "aws_security_group" "ApacheAppVPC-LoadBalancer-SecGrp" {
+    name = "ApacheAppVPC-LoadBalancer-SecGrp"
+    description = "Security group for Apache target group for port 80 and 443"
+    vpc_id = aws_vpc.ApacheApp-vpc.id
+
+    ingress {
+      description = "Allow ssh for target group hosts"
+      from_port = 22
+      to_port = 22
+      protocol = "tcp"
+      cidr_blocks = [ "0.0.0.0/0" ]
+    }
+
+    ingress {
+      description = "Allow http traffic for this security group"
+      from_port = 80
+      to_port = 80
+      protocol = "tcp"
+      cidr_blocks = [ "0.0.0.0/0" ]
+    }
+
+    ingress {
+      description = "Allow https traffic for this security group"
+      from_port = 443
+      to_port = 443
+      protocol = "tcp"
+      cidr_blocks = [ "0.0.0.0/0" ]
+    }
+
+    egress {
+    from_port = 0
+    to_port = 0
+    protocol = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+    }
+}
+
+resource "aws_security_group" "ApacheAppVPC-ec2-SecGrp" {
+    name = "ApacheAppVPC-ec2-SecGrp"
+    description = "Allow inboud from ALB only"
+    vpc_id = aws_vpc.ApacheApp-vpc.id
+
+    ingress {
+      from_port = 0
+      to_port = 0
+      protocol = -1
+      security_groups = [ aws_security_group.ApacheAppVPC-LoadBalancer-SecGrp ]
+    }
+
+    ingress {
+      description = "Allow SSH on port 22"
+      from_port = 22
+      to_port = 22
+      protocol = "tcp"
+      cidr_blocks = ["0.0.0.0/0"]
+    }
+
+    egress {
+    from_port = 0
+    to_port = 0
+    protocol = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+    }
 }
