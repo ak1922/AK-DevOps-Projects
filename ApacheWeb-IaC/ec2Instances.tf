@@ -16,7 +16,7 @@ resource "aws_launch_template" "ApacheApp-LaunchTemplate" {
   instance_type = var.instype
   key_name = var.mykey
   user_data = file("user-data.sh")
-  vpc_security_group_ids = [ aws_security_group.ApacheAppVPC-TargetGroup-SecGrp.id ]
+  vpc_security_group_ids = [ aws_security_group.ApacheAppVPC-LoadBalancer-SecGrp.id ]
   
   tags = {
     Name = "ApacheApp-LaunchTemplate"
@@ -27,7 +27,7 @@ resource "aws_lb" "ApacheApp-LoadBalancer" {
     name = "ApacheApp-LoadBalancer"
     internal = false
     load_balancer_type = "application"
-    security_groups = [ aws_security_group.ApacheAppVPC-TargetGroup-SecGrp.id ]
+    security_groups = [ aws_security_group.ApacheAppVPC-LoadBalancer-SecGrp.id ]
     subnets = [ aws_subnet.ApacheAppVPC-PrivateSubnet1.id , aws_subnet.ApacheAppVPC-PrivateSubnet2.id ]
 
     tags = {
@@ -115,4 +115,9 @@ resource "aws_autoscaling_group" "ApacheApp-AutoScalingGroup" {
       id = aws_launch_template.ApacheApp-LaunchTemplate.id
       version = "$Latest"
     }
+}
+
+resource "aws_autoscaling_attachment" "ApacheApp-AutoScalingGroup-Attach" {
+  autoscaling_group_name = aws_autoscaling_group.ApacheApp-AutoScalingGroup.id
+  lb_target_group_arn = aws_lb_target_group.ApacheApp-TargetGroupHttp.arn
 }

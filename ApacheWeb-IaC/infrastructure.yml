@@ -213,6 +213,9 @@ Resources:
         - IpProtocol: tcp
           FromPort: 443
           ToPort: 443
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
           CidrIp: 0.0.0.0/0
       Tags: 
         - Key: Name
@@ -228,15 +231,15 @@ Resources:
         - IpProtocol: tcp
           FromPort: 80
           ToPort: 80
-          CidrIp: 0.0.0.0/0
+          SourceSecurityGroupId: !Ref rApacheAppLoadBalancerSecurityGroup
         - IpProtocol: tcp
           FromPort: 443
           ToPort: 443
-          CidrIp: 0.0.0.0/0
+          SourceSecurityGroupId: !Ref rApacheAppLoadBalancerSecurityGroup
         - IpProtocol: tcp
           FromPort: 22
           ToPort: 22
-          CidrIp: 0.0.0.0/0
+          SourceSecurityGroupId: !Ref rApacheAppBastionSecurityGroup
       Tags: 
         - Key: Name
           Value: ApacheApp-AppServSecGrp
@@ -273,7 +276,7 @@ Resources:
         InstanceType: t2.micro
         KeyName: !Ref pKeyPair
         SecurityGroupIds:
-          - !Ref rApacheAppServerSecurityGroup
+          - !Ref rApacheAppLoadBalancerSecurityGroup
         UserData: !Base64 |
           #!/bin/bash -x
           sudo yum update -y
@@ -346,8 +349,8 @@ Resources:
       TargetGroupARNs:
         - !Ref rApacheAppTargetGroup
       VPCZoneIdentifier:
-        - !Ref rApacheAppVPCPublicSubnet1
-        - !Ref rApacheAppVPCPublicSubnet2
+        - !Ref rApacheAppVPCPrivateSubnet1
+        - !Ref rApacheAppVPCPrivateSubnet2
       NotificationConfigurations: 
         - TopicARN: !Ref rApacheAppAutoScalingGroupSNSTopic1
           NotificationTypes:
@@ -374,7 +377,7 @@ Resources:
         TargetTrackingConfiguration: 
           PredefinedMetricSpecification: 
             PredefinedMetricType: ASGAverageCPUUtilization
-          TargetValue: 50.0 
+          TargetValue: 80.0 
 
   rApacheAppAutoScalingGroupSNSTopic1:
     Type: AWS::SNS::Topic
@@ -418,7 +421,7 @@ Resources:
         - !Ref rApacheAppAutoScalingGroupSNSTopic2
       Period: 10
       Statistic: Average 
-      Threshold: 50
+      Threshold: 80
 
   rApacheAppTargScalEventRule:  
     Type: AWS::Events::Rule
